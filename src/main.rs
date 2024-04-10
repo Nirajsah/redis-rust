@@ -21,6 +21,5 @@ fn main() {
 }
 
 fn handle_connection(mut stream: TcpStream) {
-    stream.write(b"HTTP/1.1 200 OK\r\n\r\n").unwrap();
     stream.write(b"+PONG\r\n").unwrap();
 }
