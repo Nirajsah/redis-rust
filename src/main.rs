@@ -10,7 +10,7 @@ fn main() {
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-                handle_connection(stream);
+                std::thread::spawn(move || handle_connection(stream));
                 println!("accepted new connection");
             }
             Err(e) => {
