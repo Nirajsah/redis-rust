@@ -1,5 +1,5 @@
 use std::{
-    io::Write,
+    io::{Read, Write},
     net::{TcpListener, TcpStream},
 };
 
@@ -21,5 +21,13 @@ fn main() {
 }
 
 fn handle_connection(mut stream: TcpStream) {
-    stream.write(b"+PONG\r\n").unwrap();
+    let mut buf = [0; 1024];
+    match stream.read(&mut buf) {
+        Ok(_) => {
+            stream.write(b"+PONG\r\n").unwrap();
+        }
+        Err(e) => {
+            println!("error: {}", e);
+        }
+    };
 }
