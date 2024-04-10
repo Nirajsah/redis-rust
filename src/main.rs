@@ -22,12 +22,12 @@ fn main() {
 
 fn handle_connection(mut stream: TcpStream) {
     let mut buf = [0; 1024];
-    match stream.read(&mut buf) {
-        Ok(_) => {
-            stream.write(b"+PONG\r\n").unwrap();
+
+    loop {
+        let data = stream.read(&mut buf).unwrap();
+        if data == 0 {
+            break;
         }
-        Err(e) => {
-            println!("error: {}", e);
-        }
-    };
+        stream.write(b"+PONG\r\n").unwrap();
+    }
 }
