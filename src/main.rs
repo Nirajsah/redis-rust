@@ -1,5 +1,6 @@
 #![allow(unused_imports)]
 use std::{
+    collections::HashMap,
     io::{Read, Write},
     net::{TcpListener, TcpStream},
 };
@@ -31,13 +32,9 @@ fn parser(data: &str) -> Vec<&str> {
     v
 }
 
-struct Bar {
-    foo: String,
-}
-
 fn handle_connection(mut stream: TcpStream) {
     let mut buf = [0; 1024];
-    let mut ata = Bar { foo: String::new() };
+    let mut cmd: HashMap<String, String> = HashMap::new();
     loop {
         let data = stream.read(&mut buf).unwrap();
         if data == 0 {
@@ -53,16 +50,15 @@ fn handle_connection(mut stream: TcpStream) {
                 .write(format!("${}\r\n{}\r\n", x[1].len(), x[1]).as_bytes())
                 .unwrap();
         } else if x[0] == "set" {
-            ata.foo = x[2].to_string();
+            cmd.insert(x[1].to_string(), x[2].to_string());
             let _ = stream.write(b"+OK\r\n").unwrap();
         } else if x[0] == "get" {
-            if x[1] != "foo" {
-                let _ = stream.write(b"$-1\r\n").unwrap();
-            } else {
-                let _ = stream
-                    .write(format!("${}\r\n{}\r\n", ata.foo.len(), ata.foo).as_bytes())
-                    .unwrap();
-            }
+            let _ = match cmd.get(x[1]) {
+                Some(value) => {
+                    stream.write(format!("${}\r\n{}\r\n", value.len(), value).as_bytes())
+                }
+                None => stream.write(b"$-1\r\n"),
+            };
         } else {
             stream.write(b"+PONG\r\n").unwrap();
         }
