@@ -71,7 +71,7 @@ fn handle_connection(mut stream: TcpStream) {
                     if value.1 < SystemTime::now() {
                         stream.write(format!("${}\r\n{}\r\n", value.0.len(), value.0).as_bytes())
                     } else {
-                        return;
+                        stream.write(b"$-1\r\n")
                     }
                 }
                 None => stream.write(b"$-1\r\n"),
