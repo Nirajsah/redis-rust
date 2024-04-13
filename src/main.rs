@@ -3,6 +3,7 @@ use std::{
     collections::HashMap,
     io::{Read, Write},
     net::{TcpListener, TcpStream},
+    time::{Duration, SystemTime},
 };
 
 fn main() {
@@ -34,7 +35,7 @@ fn parser(data: &str) -> Vec<&str> {
 
 fn handle_connection(mut stream: TcpStream) {
     let mut buf = [0; 1024];
-    let mut cmd: HashMap<String, String> = HashMap::new();
+    let mut cmd: HashMap<String, (String, SystemTime)> = HashMap::new();
     loop {
         let data = stream.read(&mut buf).unwrap();
         if data == 0 {
@@ -50,12 +51,28 @@ fn handle_connection(mut stream: TcpStream) {
                 .write(format!("${}\r\n{}\r\n", x[1].len(), x[1]).as_bytes())
                 .unwrap();
         } else if x[0] == "set" {
-            cmd.insert(x[1].to_string(), x[2].to_string());
+            if x.len() != 3 {
+                let t: u64 = match x[4].parse() {
+                    Ok(num) => num,
+                    Err(_) => 0,
+                };
+                let duration = Duration::from_millis(t);
+                let exp_time = SystemTime::now() + duration;
+                cmd.insert(x[1].to_string(), (x[2].to_string(), exp_time));
+            } else {
+                let duration = Duration::from_millis(0);
+                let exp_time = SystemTime::now() + duration;
+                cmd.insert(x[1].to_string(), (x[2].to_string(), exp_time));
+            }
             let _ = stream.write(b"+OK\r\n").unwrap();
         } else if x[0] == "get" {
             let _ = match cmd.get(x[1]) {
                 Some(value) => {
-                    stream.write(format!("${}\r\n{}\r\n", value.len(), value).as_bytes())
+                    if value.1 < SystemTime::now() {
+                        stream.write(format!("${}\r\n{}\r\n", value.0.len(), value.0).as_bytes())
+                    } else {
+                        return;
+                    }
                 }
                 None => stream.write(b"$-1\r\n"),
             };
