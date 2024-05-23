@@ -6,6 +6,14 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+#[derive(Debug)]
+enum ReCommand {
+    Set(String, String, u64),
+    Get(String),
+    Echo(String),
+    Ping,
+}
+
 fn main() {
     println!("Logs from your program will appear here!");
 
@@ -33,9 +41,23 @@ fn parser(data: &str) -> Vec<&str> {
     v
 }
 
+fn process_command(x: Vec<&str>) -> Option<ReCommand> {
+    if x.is_empty() {
+        return None;
+    }
+    let command = match x[0] {
+        "echo" => Some(ReCommand::Echo(x[1].to_string())),
+        "get" => Some(ReCommand::Get(x[1].to_string())),
+        "set" => Some(ReCommand::Set(x[1].to_string(), x[2].to_string(), 10)),
+        "ping" => Some(ReCommand::Ping),
+        _ => None,
+    };
+    command
+}
+
 fn handle_connection(mut stream: TcpStream) {
     let mut buf = [0; 1024];
-    let mut cmd: HashMap<String, (String, SystemTime)> = HashMap::new();
+    let mut data_holder: HashMap<String, (String, SystemTime)> = HashMap::new();
     loop {
         let data = stream.read(&mut buf).unwrap();
         if data == 0 {
@@ -44,41 +66,33 @@ fn handle_connection(mut stream: TcpStream) {
         let y = String::from_utf8_lossy(&buf[..data]);
         let x = parser(&y);
 
-        if x.len() == 0 {
-            break;
-        } else if x[0] == "echo" {
-            let _ = stream
-                .write(format!("${}\r\n{}\r\n", x[1].len(), x[1]).as_bytes())
-                .unwrap();
-        } else if x[0] == "set" {
-            if x.len() != 3 {
-                let t: u64 = match x[4].parse() {
-                    Ok(num) => num,
-                    Err(_) => 0,
-                };
-                let duration = Duration::from_millis(t);
-                let exp_time = SystemTime::now() + duration;
-                cmd.insert(x[1].to_string(), (x[2].to_string(), exp_time));
-            } else {
-                let duration = Duration::from_millis(0);
-                let exp_time = SystemTime::now() + duration;
-                cmd.insert(x[1].to_string(), (x[2].to_string(), exp_time));
-            }
-            let _ = stream.write(b"+OK\r\n").unwrap();
-        } else if x[0] == "get" {
-            let _ = match cmd.get(x[1]) {
-                Some(value) => {
-                    if value.1 < SystemTime::now() {
-                        stream.write(format!("${}\r\n{}\r\n", value.0.len(), value.0).as_bytes())
-                    } else {
-                        stream.write(b"$-1\r\n")
-                    }
+        if let Some(command) = process_command(x.clone()) {
+            match command {
+                ReCommand::Ping => {
+                    stream.write(b"+PONG\r\n").unwrap();
                 }
-                None => stream.write(b"$-1\r\n"),
-            };
+
+                ReCommand::Echo(mess) => {
+                    let _ = stream
+                        .write(format!("${}\r\n{}\r\n", mess.len(), mess).as_bytes())
+                        .unwrap();
+                }
+                ReCommand::Get(key) => {
+                    let _ = match data_holder.get(&key) {
+                        Some(value) => stream
+                            .write(format!("${}\r\n{}\r\n", value.0.len(), value.0).as_bytes()),
+                        None => stream.write(b"$-1\r\n"),
+                    };
+                }
+                ReCommand::Set(key, value, num) => {
+                    let duration = Duration::from_millis(num);
+                    let exp_time = SystemTime::now() + duration;
+                    data_holder.insert(key.to_string(), (value.to_string(), exp_time));
+                    let _ = stream.write(b"+OK\r\n").unwrap();
+                }
+            }
         } else {
-            stream.write(b"+PONG\r\n").unwrap();
+            let _ = stream.write(b"$-1\r\n");
         }
-        println!("{:?}", x);
     }
 }
